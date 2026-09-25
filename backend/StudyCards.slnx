@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="StudyCards.API/StudyCards.API.csproj" />
+  <Project Path="StudyCards.Application/StudyCards.Application.csproj" />
+  <Project Path="StudyCards.Domain/StudyCards.Domain.csproj" />
+  <Project Path="StudyCards.Infrastructure/StudyCards.Infrastructure.csproj" />
+</Solution>

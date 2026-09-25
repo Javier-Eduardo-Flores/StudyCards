@@ -1,0 +1,6 @@
+@StudyCards.API_HostAddress = http://localhost:5117
+
+GET {{StudyCards.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

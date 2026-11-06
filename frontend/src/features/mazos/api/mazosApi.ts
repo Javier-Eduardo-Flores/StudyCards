@@ -1,18 +1,83 @@
-// src/features/mazos/api/mazosApi.ts
-import type { MazoGlobal } from '../types/mazo.types';
+import axios from 'axios';
+import type {
+  MazoGlobal,
+  CrearMazoGlobalDto,
+  FluentValidationError,
+} from '../types/mazo.types';
 
-export const obtenerMazosGlobalesAsync = (): Promise<MazoGlobal[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const datosSimuladosBD: MazoGlobal[] = [
-        { id: 1, nombre: 'Historia Universal' },
-        { id: 2, nombre: 'Anatomía Humana' },
-        { id: 3, nombre: 'Fórmulas de Física' },
-        { id: 4, nombre: 'Verbos en Inglés' },
-        { id: 5, nombre: 'Química Orgánica' },
-        { id: 6, nombre: 'Capitales del Mundo' },
-      ];
-      resolve(datosSimuladosBD);
-    }, 1200);
-  });
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Endpoint GET
+export const obtenerMazosGlobalesAsync = async (): Promise<MazoGlobal[]> => {
+  const respuesta = await apiClient.get<MazoGlobal[]>('/mazos');
+  return respuesta.data;
+};
+
+// NUEVO: Endpoint POST
+export const crearMazoGlobalAsync = async (
+  nuevoMazo: CrearMazoGlobalDto
+): Promise<MazoGlobal> => {
+  const respuesta = await apiClient.post<MazoGlobal>('/mazos', nuevoMazo);
+  return respuesta.data;
+};
+
+// NUEVO: Extractor de Errores HTTP de .NET (Soporta FluentValidation)
+export const extraerMensajeErrorBackend = (error: unknown): string => {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      return 'Sin respuesta del servidor (.NET apagado o bloqueo CORS).';
+    }
+
+    const status = error.response.status;
+    const data = error.response.data;
+
+    // Caso B: Arreglo de errores devuelto por FluentValidation en .NET
+    if (Array.isArray(data)) {
+      const erroresFluent = (data as FluentValidationError[])
+        .map((item) => item?.errorMessage)
+        .filter(
+          (msg): msg is string =>
+            typeof msg === 'string' && msg.trim().length > 0
+        );
+
+      if (erroresFluent.length > 0) {
+        return `[HTTP ${status}] ${erroresFluent.join(' | ')}`;
+      }
+    }
+
+    // Caso C: String directo
+    if (typeof data === 'string' && data.trim().length > 0) {
+      return `[HTTP ${status}] ${data}`;
+    }
+
+    // Caso D: ProblemDetails
+    if (data && typeof data === 'object') {
+      const obj = data as Record<string, unknown>;
+      if ('errors' in obj && obj.errors && typeof obj.errors === 'object') {
+        const listaErrores = Object.values(
+          obj.errors as Record<string, string[]>
+        ).flat();
+        if (listaErrores.length > 0) {
+          return `[HTTP ${status}] ${listaErrores.join(' | ')}`;
+        }
+      }
+      const mensajeExplicito =
+        obj.error || obj.mensaje || obj.message || obj.detail || obj.title;
+      if (
+        typeof mensajeExplicito === 'string' &&
+        mensajeExplicito.trim().length > 0
+      ) {
+        return `[HTTP ${status}] ${mensajeExplicito}`;
+      }
+    }
+    return `[HTTP ${status}] El servidor rechazó la operación.`;
+  }
+  return error instanceof Error ? error.message : 'Error inesperado.';
 };

@@ -1,11 +1,15 @@
+// frontend/src/features/mazos/components/CatalogoMazosView.tsx
 import { useState, useEffect } from 'react';
 import type { MazoGlobal } from '../types/mazo.types';
 import {
   obtenerMazosGlobalesAsync,
+  eliminarMazoGlobalAsync,
   extraerMensajeErrorBackend,
 } from '../api/mazosApi';
 import { MazoGlobalCard } from './MazoGlobalCard';
 import { CrearMazoForm } from './CrearMazoForm';
+import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
+import { EditarMazoModal } from './EditarMazoModal';
 
 export function CatalogoMazosView() {
   const [mazos, setMazos] = useState<MazoGlobal[]>([]);
@@ -13,6 +17,12 @@ export function CatalogoMazosView() {
   const [errorRed, setErrorRed] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState<string>('');
   const [mostrarFormulario, setMostrarFormulario] = useState<boolean>(false);
+
+  // Estados para los Modales
+  const [mazoAEliminar, setMazoAEliminar] = useState<MazoGlobal | null>(null);
+  const [eliminando, setEliminando] = useState<boolean>(false);
+
+  const [mazoAEditar, setMazoAEditar] = useState<MazoGlobal | null>(null);
 
   useEffect(() => {
     obtenerMazosGlobalesAsync()
@@ -28,10 +38,38 @@ export function CatalogoMazosView() {
       });
   }, []);
 
-  // NUEVO: Añadir inmutablemente el mazo recién devuelto por .NET (Spread Operator)
+  // 1. Crear (POST - Spread)
   const manejarMazoCreado = (nuevoMazo: MazoGlobal) => {
     setMazos((mazosActuales) => [...mazosActuales, nuevoMazo]);
     setMostrarFormulario(false);
+  };
+
+  // 2. Actualizar (PUT - Inmutabilidad con .map)
+  const manejarMazoActualizado = (mazoActualizado: MazoGlobal) => {
+    setMazos((mazosActuales) =>
+      mazosActuales.map((m) =>
+        m.id === mazoActualizado.id ? mazoActualizado : m
+      )
+    );
+    setMazoAEditar(null);
+  };
+
+  // 3. Confirmar Eliminación (DELETE - Inmutabilidad con .filter)
+  const ejecutarEliminacion = async () => {
+    if (!mazoAEliminar) return;
+
+    try {
+      setEliminando(true);
+      await eliminarMazoGlobalAsync(mazoAEliminar.id);
+      setMazos((mazosActuales) =>
+        mazosActuales.filter((m) => m.id !== mazoAEliminar.id)
+      );
+      setMazoAEliminar(null);
+    } catch (error) {
+      alert(`Error al eliminar: ${extraerMensajeErrorBackend(error)}`);
+    } finally {
+      setEliminando(false);
+    }
   };
 
   const mazosFiltrados = mazos.filter((mazo) =>
@@ -68,6 +106,7 @@ export function CatalogoMazosView() {
         />
       )}
 
+      {/* Buscador reactivo */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <input
           type="text"
@@ -103,9 +142,34 @@ export function CatalogoMazosView() {
       {!cargando && !errorRed && (
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {mazosFiltrados.map((mazo) => (
-            <MazoGlobalCard key={mazo.id} id={mazo.id} nombre={mazo.nombre} />
+            <MazoGlobalCard
+              key={mazo.id}
+              id={mazo.id}
+              nombre={mazo.nombre}
+              onEliminar={() => setMazoAEliminar(mazo)}
+              onEditar={() => setMazoAEditar(mazo)}
+            />
           ))}
         </section>
+      )}
+
+      {/* MODAL 1: Confirmación de Eliminación */}
+      {mazoAEliminar && (
+        <ConfirmarEliminarModal
+          mazo={mazoAEliminar}
+          onConfirmar={ejecutarEliminacion}
+          onCancelar={() => setMazoAEliminar(null)}
+          eliminando={eliminando}
+        />
+      )}
+
+      {/* MODAL 2: Formulario de Edición (PUT) */}
+      {mazoAEditar && (
+        <EditarMazoModal
+          mazo={mazoAEditar}
+          onMazoActualizado={manejarMazoActualizado}
+          onCancelar={() => setMazoAEditar(null)}
+        />
       )}
     </div>
   );
